@@ -657,8 +657,8 @@
             const headers = ['Audit Date', 'Facility', 'KPI Type', 'KPI Others', 'PPTPA Name', 'PPTPA Designation', 'Period of Performance', 'Period Others', 'Year', 'Indicator'];
             const rows = [
                 ['15/01/2026', 'Klinik Kesihatan Bandar Baru', 'CliSQI', '', '', '', 'JAN - JUN', '', '2026', 'Percentage of diabetic patients with HbA1c below 7%'],
-                ['20/02/2026', 'Hospital Daerah Contoh', 'PPTPA', '', 'Ahmad bin Ali', 'Assistant Medical Officer', 'JAN - DEC', '', '2026', 'Timeliness of patient discharge summary'],
-                ['05/03/2026', 'Klinik Kesihatan Lain', 'Others', 'Custom KPI Name', '', '', 'Others', 'Q1 to Q3 only', '2026', 'Sample custom indicator description']
+                ['20/02/2026', 'Hospital Daerah Contoh', 'PPTPA', '', 'Ahmad bin Ali', 'JUSA C', 'JAN - DEC', '', '2026', 'Timeliness of patient discharge summary'],
+                ['05/03/2026', 'Klinik Kesihatan Lain', 'Others', 'KPI TKPK (P)', '', '', 'Others', 'Q1 to Q3 only', '2026', 'Sample custom indicator description']
             ];
             const csvLines = [headers, ...rows].map(r => r.map(v => {
                 const s = String(v);

@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Performance Audit Form Generator</title>
+
+<!-- Tailwind for the App UI -->
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- PapaParse for parsing CSV -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+<style>
+  :root { --line: #000; --gray: #d9d9d9; --lightgray: #f2f2f2; }
+  
+  body.app-mode { background-color: #f3f4f6; font-family: 'Inter', sans-serif; }
+  .hide-in-app { display: none !important; }
+  
+  /* Form Template Styles */
+  .form-container {
+    background: #777; /* Only visible in app mode behind sheets */
+    color: #000;
+    font-family: Arial, Helvetica, sans-serif;
+  }
+  .form-container * { box-sizing: border-box; }
+  
+  .sheet {
+    width: 210mm;
+    min-height: 297mm;
+    margin: 20px auto;
+    background: #fff;
+    padding: 12mm 14mm;
+    box-shadow: 0 0 8px rgba(0,0,0,.4);
+    position: relative;
+    page-break-after: always;
+  }
+
+  .form-header { display: flex; align-items: center; justify-content: flex-end; padding-bottom: 8px; margin-bottom: 2px; }
+  .form-title { font-size: 19px; font-weight: bold; margin-right: 16px; }
+  .header-divider { width: 2px; align-self: stretch; background: #000; margin-right: 16px; }
+  .form-code { font-size: 16px; font-weight: bold; }
+  .form-code .ver { font-size: 12px; font-weight: bold; }
+  .header-bar { height: 4px; background: #8c8c8c; margin-bottom: 10px; }
+
+  table.form-table { width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed; }
+  table.form-table.outer { border: 2px solid var(--line); }
+  table.form-table td { border: 1px solid var(--line); padding: 6px 8px; vertical-align: top; }
+  .label-cell { background: var(--gray); font-weight: bold; font-size: 12.5px; white-space: nowrap; vertical-align: middle; }
+  .field-note { font-weight: normal; font-size: 10px; }
+  .target-indicator { font-size: 13px; }
+  .target-facility { font-size: 13px; }
+  input[type="text"], input[type="date"] { border: none; width: 100%; font-family: inherit; font-size: 12px; background: transparent; padding: 2px; }
+  textarea { border: none; width: 100%; font-family: inherit; font-size: 12px; background: transparent; resize: none; padding: 2px; display: block; }
+  
+  .checkbox-line { display: flex; flex-wrap: wrap; align-items: center; font-size: 12px; margin: 2px 0; }
+  .checkbox-line label { display: inline-flex; align-items: center; font-weight: bold; white-space: nowrap; margin-right: 10px; }
+  .checkbox-line > input[type="checkbox"] { width: 12px; height: 12px; margin: 0 4px 0 0; accent-color: #000; }
+  .checkbox-line input[type="text"] { border-bottom: 1px solid #000; width: 150px; display: inline-block; }
+  
+  .pptpa-table { border-collapse: collapse; margin: 4px 0 0 0; border: none; line-height: 1; }
+  .pptpa-table td { border: none; padding: 0; vertical-align: top; }
+  .pptpa-checkbox { display: inline-flex; align-items: center; font-weight: bold; font-size: 12px; white-space: nowrap; height: 18px; margin-right: 8px; }
+  .pptpa-checkbox input { margin-right: 4px; margin-top: 0; }
+  .pptpa-value { display: flex; align-items: flex-end; height: 18px; margin-bottom: 4px; }
+  .sub-label { font-size: 11px; white-space: nowrap; margin-right: 4px; }
+  .plain-fill { border: none; border-bottom: 1px solid #000; font-family: inherit; font-size: 12px; width: 450px; padding: 0 4px; height: 16px; outline: none; }
+
+  .year-box-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .year-label { font-weight: bold; font-size: 12.5px; }
+  .year-digits { display: flex; }
+  .year-digits input { width: 20px; height: 22px; text-align: center; border: 1px solid #000; font-size: 12px; margin-right: 3px; }
+  .year-digits input:last-child { margin-right: 0; }
+
+  .section-label { font-weight: bold; font-size: 12.5px; vertical-align: middle; text-align: left; width: 19%; }
+  .item-desc-cell { width: 56%; font-size: 12px; line-height: 1.35; }
+  .item-desc-cell .item-title { font-weight: bold; }
+  .item-opts-cell { width: 25%; }
+  .opt-line { display: flex; align-items: center; font-weight: bold; font-size: 12px; margin: 1px 0; }
+  .opt-line input[type="checkbox"] { width: 14px; height: 14px; margin: 0 4px 0 0; accent-color: #000; }
+  
+  .total-row td { font-weight: bold; text-align: center; background: #fff; font-size: 12px; }
+  .total-row .tp-label { text-align: right; padding-right: 10px; }
+  .total-row .tp-value { font-size: 12px;text-align: center; white-space: pre; }
+
+  .note-text { font-size: 10.5px; font-style: italic; margin: 6px 0 10px; line-height: 1.35; }
+  .section-gap { height: 8px; }
+
+  .result-header td { background: var(--gray); font-weight: bold; text-align: center; font-size: 12.5px; padding: 6px; }
+  .grand-row .gt-label, .grand-row .gt-value { font-size: 12px;font-weight: bold; text-align: center; width: 50%; white-space: pre; }
+  .conformance-cell { padding: 14px 0; }
+  .conformance-cell label { display: flex; align-items: center; font-weight: bold; font-size: 12px; margin: 5px auto; width: max-content; }
+  .conformance-cell input[type="checkbox"] { width: 12px; height: 12px; margin-right: 6px; accent-color: #000; }
+
+  .sheet-page2 { display: flex; flex-direction: column; }
+
+  .findings-block {
+    flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0;
+    border: 2px solid var(--line); margin-top: 8px;
+  }
+  .findings-header-row { background: var(--gray); font-weight: bold; font-size: 12px; padding: 5px 8px; border-bottom: 1px solid var(--line); }
+  .findings-columns { flex: 1 1 auto; display: flex; min-height: 0; }
+  .findings-left { width: 60%; padding: 6px 8px; display: flex; flex-direction: column; border-right: 1px solid var(--line); }
+  .findings-left .fl-title { font-weight: bold; font-size: 11.5px; margin-bottom: 4px; }
+  .findings-left textarea.findings-comments { flex: 1 1 auto; font-size: 12px; }
+  .findings-right { width: 40%; display: flex; flex-direction: column; }
+  .auditor-cell { flex: 1 1 0; display: flex; flex-direction: column; padding: 6px 8px; border-bottom: 1px solid var(--line); min-height: 0; }
+  .auditor-cell:last-child { border-bottom: none; }
+  .auditor-title { font-weight: bold; font-size: 11.5px; }
+  .auditor-fill { flex: 1 1 auto; width: 100%; font-size: 11px; }
+  .auditor-hint { font-size: 9.5px; font-style: italic; }
+  .page-number { position: absolute; bottom: 8mm; left: 0; right: 0; text-align: center; font-size: 10.5px; }
+
+  @page { size: A4 portrait; margin: 0; }
+  @media print {
+    body, html { margin: 0; padding: 0; background-color: #fff !important; }
+    .app-mode { background-color: #fff !important; }
+    #ui-container, #backBtn { display: none !important; }
+    .form-container { background: #fff; }
+    
+    .sheet {
+      margin: 0;
+      box-shadow: none;
+      width: 210mm;
+      min-height: 297mm;
+      padding: 12mm 14mm;
+      page-break-after: always;
+    }
+    .sheet:last-child { page-break-after: auto; }
+  }
+</style>
+</head>
+<body class="app-mode">
+
+<div id="ui-container" class="max-w-4xl mx-auto p-6 mt-10">
+    <div class="bg-white rounded-xl shadow-lg p-8">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2 text-center">Form Generator</h1>
+        <p class="text-gray-500 text-center mb-8">Upload your CSV to auto-fill and print Audit Forms</p>
+
+        <div class="text-center mb-6">
+            <button id="sampleCsvBtn" type="button" class="text-blue-600 hover:text-blue-800 font-medium text-sm underline">
+                Download sample CSV template
+            </button>
+        </div>
+
+        <div class="border-2 border-dashed border-gray-300 rounded-xl p-10 text-center hover:bg-gray-50 transition">
+            <!-- FIX: Added the missing file input element -->
+            <input type="file" id="csvFileInput" accept=".csv" class="hidden" />
+            <label for="csvFileInput" class="cursor-pointer flex flex-col items-center">
+                <svg class="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                <span class="text-gray-600 font-medium text-lg">Click to select CSV file</span>
+                <span id="fileNameDisplay" class="text-sm text-gray-500 mt-2">No file chosen</span>
+            </label>
+        </div>
+
+        <div class="mt-8 flex justify-center space-x-4">
+            <button id="generateBtn" disabled class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed">
+                Generate & Print Forms
+            </button>
+        </div>
+        <div id="statusMessage" class="mt-4 text-center font-medium hidden"></div>
+    </div>
+</div>
+
+<div id="template-container" class="hide-in-app">
+    <div class="form-container" id="base-template">
+        <!-- PAGE 1 -->
+        <div class="sheet">
+          <div class="form-header">
+            <div class="form-title">PERFORMANCE AUDIT FORM</div>
+            <div class="header-divider"></div>
+            <div class="form-code">PAF.CPSU <span class="ver">Ver. 2025</span></div>
+          </div>
+          <div class="header-bar"></div>
+        
+          <table class="form-table outer">
+            <tr>
+              <td class="label-cell" style="width:28%;">AUDIT DATE <span class="field-note">(dd/mm/yyyy)</span></td>
+              <td><input type="text" class="target-date"></td>
+            </tr>
+            <tr>
+              <td class="label-cell">FACILITY</td>
+              <td><input type="text" class="target-facility"></td>
+            </tr>
+            <tr>
+              <td colspan="2" style="padding:8px;">
+                <div class="checkbox-line"><b>KPI:</b> <span class="field-note">(Please ☑ the option)</span></div>
+                <div class="checkbox-line">
+                  <label><input type="checkbox" class="target-kpi-clisqi"> CliSQI</label>
+                  <label><input type="checkbox" class="target-kpi-hpia"> HPIA</label>
+                  <label><input type="checkbox" class="target-kpi-others"> OTHERS:</label>
+                  <input type="text" class="target-kpi-others-text">
+                </div>
+                <table class="pptpa-table" style="border:none;border-collapse:collapse;">
+                  <tr>
+                    <td class="pptpa-label" style="border:none;padding:0px 0;"><label class="pptpa-checkbox"><input type="checkbox" class="target-kpi-pptpa"> PPTPA:</label></td>
+                    <td class="pptpa-value" style="border:none;padding:0px 0;"><span class="sub-label">Name :</span><input type="text" class="plain-fill target-pptpa-name"></td>
+                  </tr>
+                  <tr>
+                    <td class="pptpa-label" style="border:none;padding:0px 0;"></td>
+                    <td class="pptpa-value" style="border:none;padding:0px 0;"><span class="sub-label">Designation :</span><input type="text" class="plain-fill target-pptpa-designation"></td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td colspan="2" style="padding:0;">
+                <table style="width:100%;border:none;border-collapse:collapse;table-layout:auto;">
+                  <tr>
+                    <td style="border:none;padding:8px;vertical-align:top;">
+                      <div class="checkbox-line"><b>PERIOD OF PERFORMANCE:</b> <span class="field-note">(Please ☑ the option)</span></div>
+                      <div class="checkbox-line">
+                        <label><input type="checkbox" class="target-period-janjun"> JAN &ndash; JUN</label>
+                        <label><input type="checkbox" class="target-period-jandec"> JAN &ndash; DEC</label>
+                        <label><input type="checkbox" class="target-period-others"> OTHERS:</label> Please specify:
+                        <input type="text" class="target-period-others-text">
+                      </div>
+                    </td>
+                    <td style="border:none;padding:8px;width:110px;vertical-align:top;">
+                      <div class="year-box-wrap">
+                        <div class="year-label">YEAR:</div>
+                        <div class="year-digits">
+                          <input type="text" maxlength="1" class="target-year-0">
+                          <input type="text" maxlength="1" class="target-year-1">
+                          <input type="text" maxlength="1" class="target-year-2">
+                          <input type="text" maxlength="1" class="target-year-3">
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td class="label-cell" style="vertical-align:middle;">INDICATOR</td>
+              <td style="height:60px;"><textarea rows="3" class="target-indicator"></textarea></td>
+            </tr>
+          </table>
+        
+          <div class="note-text">
+            <b>NOTE:</b> This form is to be filled by the auditor during the audit activity. Performance that has been stated in the respected Performance Verification
+            Form (PVF) and any other related written/ document should be audited. <b>Specific clinical processes</b> are <b>NOT</b> part of this performance audit activity.
+          </div>
+        
+          <table class="form-table outer">
+            <tr>
+              <td class="section-label" rowspan="3">A. Understanding<br>of the auditees</td>
+              <td class="item-desc-cell"><span class="item-title">Indicator and the technical specification:</span><br>Auditee able to show and explain the technical specification (definition of terms, criteria, standards, etc.)</td>
+              <td class="item-opts-cell">
+                <div class="opt-line"><input type="checkbox" data-group="a1" data-points="3"> Yes (3)</div>
+                <div class="opt-line"><input type="checkbox" data-group="a1" data-points="0"> No (0)</div>
+              </td>
+            </tr>
+            <tr>
+              <td class="item-desc-cell"><span class="item-title">Data collection process:</span><br>Auditee able to explain on data collection and calculation.</td>
+              <td class="item-opts-cell">
+                <div class="opt-line"><input type="checkbox" data-group="a2" data-points="1"> Yes (1)</div>
+                <div class="opt-line"><input type="checkbox" data-group="a2" data-points="0"> No (0)</div>
+              </td>
+            </tr>
+            <tr>
+              <td class="item-desc-cell"><span class="item-title">SIQ:</span><br>Auditee able to explain necessary actions to be taken if there is any SIQ.</td>
+              <td class="item-opts-cell">
+                <div class="opt-line"><input type="checkbox" data-group="a3" data-points="1"> Yes (1)</div>
+                <div class="opt-line"><input type="checkbox" data-group="a3" data-points="0"> No (0)</div>
+              </td>
+            </tr>
+            <tr class="total-row">
+              <td colspan="2" class="tp-label">TOTAL POINTS</td>
+              <td class="tp-value"><span class="section-total" data-section="A"></span>/5</td>
+            </tr>
+          </table>
+        
+          <div class="section-gap"></div>
+        
+          <table class="form-table outer">
+            <tr>
+              <td class="section-label" rowspan="2">B. Filing system<br>of the audited<br>indicator</td>
+              <td class="item-desc-cell"><span class="item-title">Presence of filing system</span> (proper filing system to keep the relevant KPI documents).</td>
+              <td class="item-opts-cell">
+                <div class="opt-line"><input type="checkbox" data-group="b1" data-points="1"> Yes (1)</div>
+                <div class="opt-line"><input type="checkbox" data-group="b1" data-points="0"> No (0)</div>
+              </td>
+            </tr>
+            <tr>
+              <td class="item-desc-cell"><span class="item-title">PVFs</span> are being kept for at least 1 year.</td>
+              <td class="item-opts-cell">
+                <div class="opt-line"><input type="checkbox" data-group="b2" data-points="1"> Yes (1)</div>
+                <div class="opt-line"><input type="checkbox" data-group="b2" data-points="0"> No (0)</div>
+                <div class="opt-line"><input type="checkbox" data-group="b2" data-points="1"> N/A (1)</div>
+              </td>
+            </tr>
+            <tr class="total-row">
+              <td colspan="2" class="tp-label">TOTAL POINTS</td>
+              <td class="tp-value"><span class="section-total" data-section="B"></span>/2</td>
+            </tr>
+          </table>
+        
+          <div class="section-gap"></div>
+        
+          <table class="form-table outer">
+            <tr>
+              <td class="section-label" rowspan="4">C. Data validity</td>
+              <td class="item-desc-cell"><span class="item-title">Primary Data and Secondary Data</span> is shown, traceable and SIMILAR to the reported performance AND in accordance with the technical specification</td>
+              <td class="item-opts-cell">
+                <div class="opt-line"><input type="checkbox" data-group="c1" data-points="3"> Yes (3)</div>
+                <div class="opt-line"><input type="checkbox" data-group="c1" data-points="0"> No (0)</div>
+              </td>
+            </tr>
+            <tr>
+              <td class="item-desc-cell"><span class="item-title">Performance Verification Form (PVF)</span> produced by <b>CPSU</b> is being used and shown (available).</td>
+              <td class="item-opts-cell">
+                <div class="opt-line"><input type="checkbox" data-group="c2" data-points="1"> Yes (1)</div>
+                <div class="opt-line"><input type="checkbox" data-group="c2" data-points="0"> No (0)</div>
+              </td>
+            </tr>
+            <tr>
+              <td class="item-desc-cell"><span class="item-title">Final reported data</span> to HQ or JKN is similar to PVF</td>
+              <td class="item-opts-cell">
+                <div class="opt-line"><input type="checkbox" data-group="c3" data-points="2"> Yes (2)</div>
+                <div class="opt-line"><input type="checkbox" data-group="c3" data-points="0"> No (0)</div>
+              </td>
+            </tr>
+            <tr>
+              <td class="item-desc-cell"><span class="item-title">Performance Verification</span> - PVF must have the name, signature, designation and stamp of the accountable person. Date of verification must also be available.</td>
+              <td class="item-opts-cell">
+                <div class="opt-line"><input type="checkbox" data-group="c4" data-points="2"> Yes (2)</div>
+                <div class="opt-line"><input type="checkbox" data-group="c4" data-points="0"> No (0)</div>
+              </td>
+            </tr>
+            <tr class="total-row">
+              <td colspan="2" class="tp-label">TOTAL POINTS</td>
+              <td class="tp-value"><span class="section-total" data-section="C"></span>/8</td>
+            </tr>
+          </table>
+        
+          <div class="page-number">1</div>
+        </div>
+        
+        <div class="sheet sheet-page2">
+          <div class="form-header">
+            <div class="form-title">PERFORMANCE AUDIT FORM</div>
+            <div class="header-divider"></div>
+            <div class="form-code">PAF.CPSU <span class="ver">Ver. 2025</span></div>
+          </div>
+          <div class="header-bar"></div>
+        
+          <table class="form-table outer">
+            <tr>
+              <td class="section-label" rowspan="4">D. Administrative and surveillance activities in the facility</td>
+              <td class="item-desc-cell"><span class="item-title">Person in-charge</span> of the KPI appointed (appointment letter available).</td>
+              <td class="item-opts-cell">
+                <div class="opt-line"><input type="checkbox" data-group="d1" data-points="1"> Yes (1)</div>
+                <div class="opt-line"><input type="checkbox" data-group="d1" data-points="0"> No (0)</div>
+              </td>
+            </tr>
+            <tr>
+              <td class="item-desc-cell">This KPI performance has been discussed and documented.</td>
+              <td class="item-opts-cell">
+                <div class="opt-line"><input type="checkbox" data-group="d2" data-points="1"> Yes (1)</div>
+                <div class="opt-line"><input type="checkbox" data-group="d2" data-points="0"> No (0)</div>
+              </td>
+            </tr>
+            <tr>
+              <td class="item-desc-cell">There is evidence of previous <b>external/ internal audit activity</b> being conducted within 12 months (copy of PAF).</td>
+              <td class="item-opts-cell">
+                <div class="opt-line"><input type="checkbox" data-group="d3" data-points="1"> Yes (1)</div>
+                <div class="opt-line"><input type="checkbox" data-group="d3" data-points="0"> No (0)</div>
+                <div class="opt-line"><input type="checkbox" data-group="d3" data-points="1"> N/A (1)</div>
+              </td>
+            </tr>
+            <tr>
+              <td class="item-desc-cell">If SIQ: action has been taken for improvement and able to show evidence.</td>
+              <td class="item-opts-cell">
+                <div class="opt-line"><input type="checkbox" data-group="d4" data-points="2"> Yes (2)</div>
+                <div class="opt-line"><input type="checkbox" data-group="d4" data-points="0"> No (0)</div>
+                <div class="opt-line"><input type="checkbox" data-group="d4" data-points="2"> N/A (2)</div>
+              </td>
+            </tr>
+            <tr class="total-row">
+              <td colspan="2" class="tp-label">TOTAL POINTS</td>
+              <td class="tp-value"><span class="section-total" data-section="D"></span>/5</td>
+            </tr>
+          </table>
+        
+          <div class="section-gap"></div>
+        
+          <table class="form-table outer">
+            <tr class="result-header"><td colspan="2">AUDIT RESULT:</td></tr>
+            <tr class="grand-row">
+              <td class="gt-label">GRAND TOTAL</td>
+              <td class="gt-value"><span class="grand-total"></span>/20</td>
+            </tr>
+            <tr>
+              <td colspan="2" class="conformance-cell">
+                <label><input type="checkbox"> FULL CONFORMANCE (20)</label>
+                <label><input type="checkbox"> PARTIAL CONFORMANCE (11-19)</label>
+                <label><input type="checkbox"> NON- CONFORMANCE (0-10)</label>
+              </td>
+            </tr>
+          </table>
+        
+          <div class="section-gap"></div>
+        
+          <div class="findings-block">
+            <div class="findings-header-row">AUDIT FINDING(S) &amp; ACKNOWLEDGEMENT</div>
+            <div class="findings-columns">
+              <div class="findings-left">
+                <div class="fl-title">Findings &amp; Auditor&rsquo;s Comments:</div>
+                <textarea class="findings-comments"></textarea>
+              </div>
+              <div class="findings-right">
+                <div class="auditor-cell">
+                  <div class="auditor-title">Auditor 1</div>
+                  <textarea class="auditor-fill"></textarea>
+                  <div class="auditor-hint">(Name/ Signature/ Designation/ Stamp)</div>
+                </div>
+                <div class="auditor-cell">
+                  <div class="auditor-title">Auditor 2</div>
+                  <textarea class="auditor-fill"></textarea>
+                  <div class="auditor-hint">(Name/ Signature/ Designation/ Stamp)</div>
+                </div>
+                <div class="auditor-cell">
+                  <div class="auditor-title">Auditor 3 / Auditee</div>
+                  <textarea class="auditor-fill"></textarea>
+                  <div class="auditor-hint">(Name/ Signature/ Designation/ Stamp)</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        
+          <div class="page-number">2</div>
+        </div>
+    </div>
+</div>
+
+<div id="render-target" class="hide-in-app form-container"></div>
+
+<button id="backBtn" class="fixed bottom-6 right-6 bg-gray-800 text-white p-4 rounded-full shadow-lg hide-in-app z-50 hover:bg-gray-700 transition" title="Back to Setup">
+  <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+</button>
+
+<script>
+    const fileInput = document.getElementById('csvFileInput');
+    const fileNameDisplay = document.getElementById('fileNameDisplay');
+    const generateBtn = document.getElementById('generateBtn');
+    const statusMessage = document.getElementById('statusMessage');
+    const renderTarget = document.getElementById('render-target');
+    const baseTemplate = document.getElementById('base-template');
+    const uiContainer = document.getElementById('ui-container');
+    const backBtn = document.getElementById('backBtn');
+
+    let parsedData = [];
+
+    fileInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        fileNameDisplay.textContent = file.name;
+        
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            complete: function(results) {
+                if (results.data && results.data.length > 0) {
+                    parsedData = results.data;
+                    generateBtn.disabled = false;
+                    setStatus(`Successfully parsed ${parsedData.length} records. Ready to generate.`, 'text-green-600');
+                } else {
+                    generateBtn.disabled = true;
+                    setStatus('CSV appears to be empty.', 'text-red-600');
+                }
+            },
+            error: function(err) {
+                generateBtn.disabled = true;
+                setStatus('Error parsing CSV: ' + err.message, 'text-red-600');
+            }
+        });
+    });
+
+    function setStatus(msg, classes) {
+        statusMessage.textContent = msg;
+        statusMessage.className = `mt-4 text-center font-medium ${classes}`;
+        statusMessage.classList.remove('hidden');
+    }
+
+    generateBtn.addEventListener('click', function() {
+        if (parsedData.length === 0) return;
+
+        generateBtn.disabled = true;
+        generateBtn.textContent = 'Preparing Print...';
+        setStatus(`Preparing ${parsedData.length} forms...`, 'text-blue-600');
+
+        renderTarget.innerHTML = '';
+        
+        uiContainer.classList.add('hide-in-app');
+        renderTarget.classList.remove('hide-in-app');
+        backBtn.classList.remove('hide-in-app');
+        
+        document.body.style.backgroundColor = '#777';
+
+        parsedData.forEach(row => {
+            const formInstance = populateTemplate(row);
+            renderTarget.appendChild(formInstance);
+        });
+
+        // Use a slight delay so the DOM paints before bringing up the dialog
+        setTimeout(() => {
+            window.print();
+            
+            generateBtn.disabled = false;
+            generateBtn.textContent = 'Generate & Print Forms';
+            setStatus('Ready to generate again.', 'text-green-600');
+        }, 300);
+    });
+    
+    backBtn.addEventListener('click', () => {
+       renderTarget.classList.add('hide-in-app');
+       backBtn.classList.add('hide-in-app');
+       uiContainer.classList.remove('hide-in-app');
+       document.body.style.backgroundColor = ''; 
+       renderTarget.innerHTML = '';
+    });
+
+    function populateTemplate(data) {
+        const keys = Object.keys(data);
+        const getKey = (possibleNames) => {
+            // Prefer an exact (case-insensitive) header match first, to avoid
+            // e.g. "KPI Others" being picked up by a lookup for "KPI Type".
+            const exact = keys.find(k => possibleNames.some(p => k.trim().toLowerCase() === p.toLowerCase()));
+            if (exact) return exact;
+            return keys.find(k => possibleNames.some(p => k.toLowerCase().includes(p.toLowerCase())));
+        };
+
+        const dateKey = getKey(['Audit Date', 'Date']);
+        const facilityKey = getKey(['Facility']);
+        const kpiKey = getKey(['KPI Type', 'Type of KPI', 'KPI']);
+        const kpiOthersKey = getKey(['KPI Others']);
+        const pptpaNameKey = getKey(['PPTPA Name', 'Name']);
+        const pptpaDesigKey = getKey(['PPTPA Designation', 'Designation']);
+        const periodKey = getKey(['Period of Performance', 'Period']);
+        const periodOthersKey = getKey(['Period Others']);
+        const yearKey = getKey(['Year']);
+        const indicatorKey = getKey(['Indicator']);
+
+        const clone = baseTemplate.cloneNode(true);
+        clone.id = '';
+
+        if (dateKey && data[dateKey]) {
+            clone.querySelector('.target-date').setAttribute('value', data[dateKey]);
+        }
+
+        if (facilityKey && data[facilityKey]) {
+            clone.querySelector('.target-facility').setAttribute('value', data[facilityKey]);
+        }
+
+        if (yearKey && data[yearKey]) {
+            const yearStr = String(data[yearKey]).trim();
+            for (let i = 0; i < 4; i++) {
+                if (yearStr[i]) {
+                    clone.querySelector(`.target-year-${i}`).setAttribute('value', yearStr[i]);
+                }
+            }
+        }
+
+        if (kpiKey && data[kpiKey]) {
+            const kpiVal = String(data[kpiKey]).trim().toLowerCase();
+            if (kpiVal.includes('clisqi')) {
+                clone.querySelector('.target-kpi-clisqi').setAttribute('checked', 'checked');
+            } else if (kpiVal.includes('hpia')) {
+                clone.querySelector('.target-kpi-hpia').setAttribute('checked', 'checked');
+            } else if (kpiVal.includes('pptpa')) {
+                clone.querySelector('.target-kpi-pptpa').setAttribute('checked', 'checked');
+                if (pptpaNameKey && data[pptpaNameKey]) {
+                    clone.querySelector('.target-pptpa-name').setAttribute('value', data[pptpaNameKey]);
+                }
+                if (pptpaDesigKey && data[pptpaDesigKey]) {
+                    clone.querySelector('.target-pptpa-designation').setAttribute('value', data[pptpaDesigKey]);
+                }
+            } else {
+                clone.querySelector('.target-kpi-others').setAttribute('checked', 'checked');
+                const othersText = (kpiOthersKey && data[kpiOthersKey]) ? data[kpiOthersKey] : data[kpiKey];
+                clone.querySelector('.target-kpi-others-text').setAttribute('value', othersText);
+            }
+        }
+
+        if (periodKey && data[periodKey]) {
+            const periodVal = String(data[periodKey]).trim().toLowerCase();
+            if (periodVal.includes('jun')) {
+                clone.querySelector('.target-period-janjun').setAttribute('checked', 'checked');
+            } else if (periodVal.includes('dec')) {
+                clone.querySelector('.target-period-jandec').setAttribute('checked', 'checked');
+            } else {
+                clone.querySelector('.target-period-others').setAttribute('checked', 'checked');
+                const othersText = (periodOthersKey && data[periodOthersKey]) ? data[periodOthersKey] : data[periodKey];
+                clone.querySelector('.target-period-others-text').setAttribute('value', othersText);
+            }
+        }
+
+        if (indicatorKey && data[indicatorKey]) {
+            clone.querySelector('.target-indicator').textContent = data[indicatorKey];
+        }
+
+        return clone;
+    }
+
+    // ---------- Live scoring: blank until ticked, computed once ticked ----------
+    const SECTIONS = ['a', 'b', 'c', 'd'];
+
+    function recalcInstance(instance) {
+        let anyCheckedOverall = false;
+        let grandSum = 0;
+
+        SECTIONS.forEach(sec => {
+            const boxes = instance.querySelectorAll(`input[type="checkbox"][data-group^="${sec}"]`);
+            let checkedAny = false;
+            let sum = 0;
+            boxes.forEach(cb => {
+                if (cb.checked) {
+                    checkedAny = true;
+                    sum += parseInt(cb.getAttribute('data-points') || '0', 10);
+                }
+            });
+            const span = instance.querySelector(`.section-total[data-section="${sec.toUpperCase()}"]`);
+            if (span) span.textContent = checkedAny ? String(sum) : '';
+            if (checkedAny) {
+                anyCheckedOverall = true;
+                grandSum += sum;
+            }
+        });
+
+        const gSpan = instance.querySelector('.grand-total');
+        if (gSpan) gSpan.textContent = anyCheckedOverall ? String(grandSum) : '';
+    }
+
+    renderTarget.addEventListener('change', function(e) {
+        const cb = e.target;
+        if (cb.type !== 'checkbox' || !cb.hasAttribute('data-group')) return;
+
+        const instance = cb.closest('.form-container');
+        if (!instance) return;
+
+        // Enforce single-select (radio-like) within the same question, scoped to this form only.
+        const group = cb.getAttribute('data-group');
+        if (cb.checked) {
+            instance.querySelectorAll(`input[type="checkbox"][data-group="${group}"]`).forEach(other => {
+                if (other !== cb) other.checked = false;
+            });
+        }
+
+        recalcInstance(instance);
+    });
+
+    // ---------- Sample CSV template download ----------
+    const sampleCsvBtn = document.getElementById('sampleCsvBtn');
+    if (sampleCsvBtn) {
+        sampleCsvBtn.addEventListener('click', function() {
+            const headers = ['Audit Date', 'Facility', 'KPI Type', 'KPI Others', 'PPTPA Name', 'PPTPA Designation', 'Period of Performance', 'Period Others', 'Year', 'Indicator'];
+            const rows = [
+                ['15/01/2026', 'Klinik Kesihatan Bandar Baru', 'CliSQI', '', '', '', 'JAN - JUN', '', '2026', 'Percentage of diabetic patients with HbA1c below 7%'],
+                ['20/02/2026', 'Hospital Daerah Contoh', 'PPTPA', '', 'Ahmad bin Ali', 'Assistant Medical Officer', 'JAN - DEC', '', '2026', 'Timeliness of patient discharge summary'],
+                ['05/03/2026', 'Klinik Kesihatan Lain', 'Others', 'Custom KPI Name', '', '', 'Others', 'Q1 to Q3 only', '2026', 'Sample custom indicator description']
+            ];
+            const csvLines = [headers, ...rows].map(r => r.map(v => {
+                const s = String(v);
+                return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+            }).join(','));
+            const csvContent = csvLines.join('\r\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'audit_form_template.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+    }
+</script>
+
+</body>
+</html>
